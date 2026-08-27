@@ -38,7 +38,20 @@ export async function updateSettings(formData: FormData) {
       youtubeUrl: parsed.youtubeUrl || null,
       contactEmail: parsed.contactEmail || null,
     },
-    create: { id: "main", ...parsed },
+    create: {
+      id: "main",
+      projectName: parsed.projectName,
+      tagline: parsed.tagline || "",
+      impactPhrase: parsed.impactPhrase || "",
+      bio: parsed.bio || "",
+      logoUrl: parsed.logoUrl || null,
+      profileImageUrl: parsed.profileImageUrl || null,
+      instagramUrl: parsed.instagramUrl || null,
+      tiktokUrl: parsed.tiktokUrl || null,
+      whatsappNumber: parsed.whatsappNumber || null,
+      youtubeUrl: parsed.youtubeUrl || null,
+      contactEmail: parsed.contactEmail || null,
+    },
   });
 
   await logAdminAction(session.user.id, "settings.update");
