@@ -1,0 +1,169 @@
+// ============================================================
+// O De Paula Program — Prisma Schema
+// Banco recomendado: PostgreSQL (ou Supabase, que é PostgreSQL)
+// ============================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// Administrador do painel (/admin)
+// -------------------------------------------------------------
+model Admin {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin") // admin | editor
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
+  logs         AdminLog[]
+
+  @@map("admins")
+}
+
+// Log simples de ações administrativas (auditoria)
+model AdminLog {
+  id        String   @id @default(cuid())
+  adminId   String?
+  admin     Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  action    String // e.g. "event.create", "certificate.revoke"
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@map("admin_logs")
+}
+
+// -------------------------------------------------------------
+// Eventos / Workshops
+// -------------------------------------------------------------
+model Event {
+  id             String   @id @default(cuid())
+  title          String
+  slug           String   @unique
+  description    String
+  date           DateTime
+  time           String? // texto livre, ex: "19h às 22h"
+  location       String
+  city           String
+  imageUrl       String?
+  registrationUrl String?
+  status         EventStatus @default(ACTIVE)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  certificates   Certificate[]
+
+  @@index([status, order])
+  @@map("events")
+}
+
+enum EventStatus {
+  ACTIVE
+  INACTIVE
+  SOLD_OUT
+  FINISHED
+}
+
+// -------------------------------------------------------------
+// Links personalizados (Linktree)
+// -------------------------------------------------------------
+model LinkItem {
+  id          String   @id @default(cuid())
+  title       String
+  url         String
+  description String?
+  icon        String   @default("link") // nome do ícone (lucide-react)
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  clicks      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, order])
+  @@map("link_items")
+}
+
+// -------------------------------------------------------------
+// Certificados
+// -------------------------------------------------------------
+model Certificate {
+  id                 String   @id @default(cuid())
+  certificateNumber  String   @unique // número sequencial de exibição, ex: 000123
+  validationKey      String   @unique // chave única, ex: ODP-2026-A7K92X
+  participantName    String
+  participantDocument String? // CPF ou identificador opcional
+  courseName         String
+  workload           String  // carga horária, ex: "8 horas"
+  instructor         String
+  eventDate          DateTime
+  location           String?
+  notes              String?
+  status             CertificateStatus @default(VALID)
+  issuedAt           DateTime @default(now())
+  revokedAt          DateTime?
+  revokedReason      String?
+  viewCount          Int      @default(0)
+
+  eventId            String?
+  event              Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([validationKey])
+  @@map("certificates")
+}
+
+enum CertificateStatus {
+  VALID
+  REVOKED
+}
+
+// -------------------------------------------------------------
+// Mensagens de contato
+// -------------------------------------------------------------
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  whatsapp  String?
+  message   String
+  ip        String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("contact_messages")
+}
+
+// -------------------------------------------------------------
+// Configurações gerais do site (registro único)
+// -------------------------------------------------------------
+model SiteSettings {
+  id              String   @id @default("main")
+  projectName     String   @default("O De Paula Program")
+  tagline         String   @default("Dance • Experience • Movement")
+  impactPhrase    String   @default("Transformando movimento em experiência.")
+  bio             String   @default("Projeto de dança contemporânea/urbana — performance, formação e experiências imersivas.")
+  logoUrl         String?
+  profileImageUrl String?
+  instagramUrl    String?
+  tiktokUrl       String?
+  whatsappNumber  String?
+  youtubeUrl      String?
+  contactEmail    String?
+  updatedAt       DateTime @updatedAt
+
+  @@map("site_settings")
+}
