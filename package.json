@@ -12,7 +12,11 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "cf:build": "prisma generate --no-engine && opennextjs-cloudflare build",
+    "cf:preview": "npm run cf:build && opennextjs-cloudflare preview",
+    "cf:deploy": "npm run cf:build && opennextjs-cloudflare deploy",
+    "cf:typegen": "wrangler types"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^5.20.0",
@@ -33,6 +37,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.15.0",
+    "wrangler": "^4.59.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.16.11",
     "@types/pg": "^8.11.10",
