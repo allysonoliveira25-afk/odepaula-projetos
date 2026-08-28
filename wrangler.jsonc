@@ -14,7 +14,8 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "95f4e3cc50df4d70ab7364a40eccc45c"
+      "id": "95f4e3cc50df4d70ab7364a40eccc45c",
+      "localConnectionString": "postgresql://postgres.vfzrzkfzrvedejvbwrjw:vWTlcZpw2ej0rSzG@aws-0-sa-east-1.pooler.supabase.com:6543/postgres"
     }
   ]
 }
