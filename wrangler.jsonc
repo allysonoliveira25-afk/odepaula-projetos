@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "odepaula-program",
+  "name": "odepaula-projetos",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -10,6 +10,15 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Variáveis públicas (não sensíveis) do Worker. NÃO coloque
+  // NEXTAUTH_SECRET aqui — segredos vão via `wrangler secret put`
+  // (ou pelo painel: Workers & Pages > odepaula-projetos > Settings >
+  // Variables and Secrets), nunca em texto puro neste arquivo, já que
+  // ele normalmente vai parar num repositório Git.
+  "vars": {
+    "NEXTAUTH_URL": "https://odepaula-projetos.trimegisto.workers.dev",
+    "NEXT_PUBLIC_SITE_URL": "https://odepaula-projetos.trimegisto.workers.dev"
   },
   "hyperdrive": [
     {

@@ -92,13 +92,47 @@ function getPrismaClient(): PrismaClient {
   return createPrismaClient();
 }
 
+// Nomes reais que existem num PrismaClient gerado a partir do nosso
+// schema.prisma (os "delegates" de cada model, em camelCase, mais os
+// métodos utilitários que começam com "$"). Qualquer outra propriedade
+// lida no objeto `prisma` (ex: "toJSON", "then", símbolos internos)
+// NÃO é uma consulta de verdade — normalmente é alguma sondagem
+// genérica feita pelo próprio React/Next.js ao tentar serializar
+// dados (por exemplo, ao montar a resposta ou ao registrar um erro).
+// Se deixássemos essas sondagens também criarem uma conexão nova com
+// o banco, o erro de verdade ficava escondido atrás de um crash
+// secundário na hora de serializar. Por isso o Proxy abaixo só reage
+// a esta lista.
+const PRISMA_DELEGATE_KEYS = new Set<string>([
+  "admin",
+  "adminLog",
+  "event",
+  "linkItem",
+  "certificate",
+  "contactMessage",
+  "siteSettings",
+  "$transaction",
+  "$connect",
+  "$disconnect",
+  "$queryRaw",
+  "$queryRawUnsafe",
+  "$executeRaw",
+  "$executeRawUnsafe",
+  "$extends",
+  "$use",
+  "$on",
+]);
+
 // Proxy "preguiçoso": por fora se comporta exatamente como um
 // PrismaClient normal (prisma.event.findMany(), prisma.$transaction(),
 // etc.), mas só instancia a conexão de verdade no momento do uso real.
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
   get(_target, prop) {
+    if (typeof prop !== "string" || !PRISMA_DELEGATE_KEYS.has(prop)) {
+      return undefined;
+    }
     const client = getPrismaClient();
-    const value = (client as unknown as Record<string | symbol, unknown>)[prop];
+    const value = (client as unknown as Record<string, unknown>)[prop];
     return typeof value === "function" ? value.bind(client) : value;
   },
 });
