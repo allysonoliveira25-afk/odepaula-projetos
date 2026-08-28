@@ -3,29 +3,36 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 // ------------------------------------------------------------------
-// Prisma Client singleton, usando o driver adapter do node-postgres.
-// Isso evita depender do binário nativo (query engine) da Prisma em
-// tempo de execução — funciona bem em ambientes serverless/edge
-// (Vercel, Cloudflare Workers) e não exige download de binários no
-// build.
+// Prisma Client, usando o driver adapter do node-postgres. Isso evita
+// depender do binário nativo (query engine) da Prisma em tempo de
+// execução — funciona bem em ambientes serverless/edge (Vercel,
+// Cloudflare Workers) e não exige download de binários no build.
 //
-// IMPORTANTE: a conexão real só é criada na primeira consulta ao
-// banco (via Proxy abaixo), nunca no momento em que este arquivo é
-// importado. Next.js importa este módulo durante a etapa de build
-// ("Collecting page data") mesmo para rotas que nunca chegam a
-// consultar o banco nesse momento — se a conexão fosse criada aqui
-// no topo do arquivo, o build falharia sempre que a variável
-// DATABASE_URL não estivesse disponível no ambiente de build
-// (que é diferente do ambiente de execução em algumas plataformas,
-// como a Cloudflare).
+// Duas coisas importantes sobre COMO a conexão é criada aqui:
+//
+// 1) A conexão real só é criada na primeira consulta ao banco (via
+//    Proxy abaixo), nunca no momento em que este arquivo é importado.
+//    O Next.js importa este módulo durante a etapa de build
+//    ("Collecting page data") mesmo para rotas que nunca chegam a
+//    consultar o banco nesse momento — se a conexão fosse criada aqui
+//    no topo do arquivo, o build falharia sempre que a variável
+//    DATABASE_URL não estivesse disponível no ambiente de build
+//    (que é diferente do ambiente de execução em algumas plataformas,
+//    como a Cloudflare).
+//
+// 2) Fora do modo de desenvolvimento local, o client NÃO é guardado
+//    num singleton global para ser reaproveitado entre requisições.
+//    Isso é obrigatório na Cloudflare Workers: o runtime proíbe usar,
+//    numa requisição nova, uma conexão (socket) que foi aberta durante
+//    o atendimento de uma requisição anterior — dá erro em tempo de
+//    execução. Cada requisição abre sua própria conexão.
 // ------------------------------------------------------------------
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
-  pgPool: Pool | undefined;
 };
 
-function createPrismaClient() {
+function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
@@ -34,16 +41,10 @@ function createPrismaClient() {
     );
   }
 
-  const pool =
-    globalForPrisma.pgPool ??
-    new Pool({
-      connectionString,
-      max: 10,
-    });
-
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.pgPool = pool;
-  }
+  const pool = new Pool({
+    connectionString,
+    max: process.env.NODE_ENV === "development" ? 10 : 3,
+  });
 
   const adapter = new PrismaPg(pool);
 
@@ -54,19 +55,26 @@ function createPrismaClient() {
 }
 
 function getPrismaClient(): PrismaClient {
-  if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = createPrismaClient();
+  // Em desenvolvimento local, reaproveita entre recarregamentos a
+  // quente (hot reload) do Next.js — não tem o problema de I/O entre
+  // requisições que existe no Worker da Cloudflare.
+  if (process.env.NODE_ENV === "development") {
+    if (!globalForPrisma.prisma) {
+      globalForPrisma.prisma = createPrismaClient();
+    }
+    return globalForPrisma.prisma;
   }
-  return globalForPrisma.prisma;
+
+  return createPrismaClient();
 }
 
 // Proxy "preguiçoso": por fora se comporta exatamente como um
 // PrismaClient normal (prisma.event.findMany(), prisma.$transaction(),
-// etc.), mas só instancia a conexão de verdade no primeiro uso real.
+// etc.), mas só instancia a conexão de verdade no momento do uso real.
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
-  get(_target, prop, _receiver) {
+  get(_target, prop) {
     const client = getPrismaClient();
-    const value = Reflect.get(client as object, prop);
+    const value = (client as unknown as Record<string | symbol, unknown>)[prop];
     return typeof value === "function" ? value.bind(client) : value;
   },
 });
