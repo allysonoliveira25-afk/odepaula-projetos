@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 // ------------------------------------------------------------------
 // Prisma Client, usando o driver adapter do node-postgres. Isso evita
@@ -8,38 +9,61 @@ import { Pool } from "pg";
 // execução — funciona bem em ambientes serverless/edge (Vercel,
 // Cloudflare Workers) e não exige download de binários no build.
 //
-// Duas coisas importantes sobre COMO a conexão é criada aqui:
+// Coisas importantes sobre COMO a conexão é criada aqui:
 //
 // 1) A conexão real só é criada na primeira consulta ao banco (via
 //    Proxy abaixo), nunca no momento em que este arquivo é importado.
 //    O Next.js importa este módulo durante a etapa de build
 //    ("Collecting page data") mesmo para rotas que nunca chegam a
 //    consultar o banco nesse momento — se a conexão fosse criada aqui
-//    no topo do arquivo, o build falharia sempre que a variável
-//    DATABASE_URL não estivesse disponível no ambiente de build
-//    (que é diferente do ambiente de execução em algumas plataformas,
-//    como a Cloudflare).
+//    no topo do arquivo, o build falharia sempre que a string de
+//    conexão não estivesse disponível no ambiente de build.
 //
-// 2) Fora do modo de desenvolvimento local, o client NÃO é guardado
-//    num singleton global para ser reaproveitado entre requisições.
-//    Isso é obrigatório na Cloudflare Workers: o runtime proíbe usar,
-//    numa requisição nova, uma conexão (socket) que foi aberta durante
-//    o atendimento de uma requisição anterior — dá erro em tempo de
-//    execução. Cada requisição abre sua própria conexão.
+// 2) Na Cloudflare Workers, a conexão passa pelo Hyperdrive (binding
+//    "HYPERDRIVE" configurado no wrangler.jsonc) em vez de conectar
+//    direto no Postgres. O Worker não lida bem com socket bruto de
+//    Postgres indo direto pra internet; o Hyperdrive resolve isso
+//    (e de quebra faz pooling/cache). Em qualquer outra plataforma
+//    (ex: Vercel) ou em desenvolvimento local, usa DATABASE_URL
+//    normalmente.
+//
+// 3) Fora do modo de desenvolvimento local, o client NÃO é guardado
+//    num singleton global para ser reaproveitado entre requisições —
+//    a Cloudflare Workers proíbe reaproveitar, numa requisição nova,
+//    uma conexão aberta durante o atendimento de uma requisição
+//    anterior. Cada requisição abre sua própria conexão (barato
+//    quando passa pelo Hyperdrive, que já mantém o pool de verdade).
 // ------------------------------------------------------------------
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function createPrismaClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
+type HyperdriveEnv = { HYPERDRIVE?: { connectionString?: string } };
 
+function resolveConnectionString(): string {
+  try {
+    const ctx = getCloudflareContext();
+    const env = ctx?.env as HyperdriveEnv | undefined;
+    if (env?.HYPERDRIVE?.connectionString) {
+      return env.HYPERDRIVE.connectionString;
+    }
+  } catch {
+    // Não está rodando dentro do runtime da Cloudflare (build, ou
+    // hospedado em outra plataforma) — cai no DATABASE_URL abaixo.
+  }
+
+  const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error(
       "DATABASE_URL não definida. Copie .env.example para .env e configure o banco de dados."
     );
   }
+  return connectionString;
+}
+
+function createPrismaClient(): PrismaClient {
+  const connectionString = resolveConnectionString();
 
   const pool = new Pool({
     connectionString,
