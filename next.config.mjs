@@ -1,8 +1,12 @@
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-// Habilita o suporte a `getCloudflareContext()` durante `next dev`
-// (não afeta o build de produção, só o ambiente local).
-initOpenNextCloudflareForDev();
+// Habilita o suporte a `getCloudflareContext()` durante `next dev`.
+// IMPORTANTE: só pode rodar em desenvolvimento local — em produção
+// (`next build`) essa função tenta emular os bindings da Cloudflare
+// (como o Hyperdrive) usando uma conexão local, o que quebra o build.
+if (process.env.NODE_ENV === "development") {
+  initOpenNextCloudflareForDev();
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
