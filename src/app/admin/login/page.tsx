@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import LoginForm from "./LoginForm";
 
 export const metadata: Metadata = {
@@ -14,7 +15,9 @@ export default function AdminLoginPage() {
         <p className="mt-1 text-center text-xs uppercase tracking-widest text-chrome">
           Painel Administrativo
         </p>
-        <LoginForm />
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
